@@ -1,0 +1,194 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>AI Assistant</title>
+    <style>
+      body {
+        font-family: Arial, sans-serif;
+        margin: 0;
+        padding: 20px;
+        background: #f7f7f7;
+      }
+
+      h1 {
+        text-align: center;
+        color: #333;
+        margin-bottom: 20px;
+      }
+
+      #chat {
+        max-width: 700px;
+        margin: auto;
+        background: white;
+        padding: 20px;
+        border-radius: 6px;
+        height: 70vh;
+        overflow-y: auto;
+        box-shadow: 0 0 10px #ccc;
+      }
+
+      .message {
+        margin-bottom: 15px;
+      }
+
+      .user {
+        color: #007bff; /* blue */
+      }
+
+      .bot {
+        color: #001f4d; /* navy */
+      }
+
+      #input-area {
+        max-width: 700px;
+        margin: auto;
+        display: flex;
+        margin-top: 10px;
+      }
+
+      #message {
+        flex: 1;
+        padding: 10px;
+        font-size: 1rem;
+        border: 1px solid #ccc;
+        border-radius: 4px;
+      }
+
+      #send {
+        padding: 10px 15px;
+        margin-left: 10px;
+        font-size: 1rem;
+        background: #0044cc;
+        color: white;
+        border: none;
+        border-radius: 4px;
+        cursor: pointer;
+      }
+
+      #send:disabled {
+        background: #999;
+        cursor: not-allowed;
+      }
+    </style>
+  </head>
+  <body>
+    <h1>AI Assistant</h1>
+    <div id="chat"></div>
+
+    <div id="input-area">
+      <input
+        type="text"
+        id="message"
+        placeholder="Type your message here..."
+        autocomplete="off"
+      />
+      <button id="send" disabled>Send</button>
+    </div>
+
+    <script>
+      const chatEl = document.getElementById("chat");
+      const inputEl = document.getElementById("message");
+      const sendBtn = document.getElementById("send");
+
+      let sessionId = null;
+      let isWaitingForResponse = false;
+
+      function addMessage(text, sender) {
+        const msgDiv = document.createElement("div");
+        msgDiv.className = "message " + sender;
+        msgDiv.textContent = text;
+        chatEl.appendChild(msgDiv);
+        chatEl.scrollTop = chatEl.scrollHeight;
+      }
+
+      async function startSession() {
+        try {
+          const res = await fetch("/new-session");
+          const data = await res.json();
+          sessionId = data.session_id;
+          addMessage(data.welcome_message, "bot");
+          sendBtn.disabled = false;
+          inputEl.focus();
+        } catch (e) {
+          addMessage("Failed to start session.", "bot");
+        }
+      }
+
+      async function sendMessage(message) {
+        if (!sessionId) {
+          addMessage("No session ID, please refresh.", "bot");
+          return;
+        }
+        if (isWaitingForResponse) return;
+
+        addMessage(message, "user");
+        inputEl.value = "";
+        sendBtn.disabled = true;
+        isWaitingForResponse = true;
+
+        const url = new URL("/chat-stream", window.location.origin);
+        url.searchParams.append("message", message);
+        url.searchParams.append("session_id", sessionId);
+
+        try {
+          const response = await fetch(url, { method: "GET" });
+          const reader = response.body.getReader();
+          const decoder = new TextDecoder("utf-8");
+
+          let botMessage = "";
+
+          while (true) {
+            const { done, value } = await reader.read();
+            if (done) break;
+            const chunk = decoder.decode(value, { stream: true });
+
+            const lines = chunk
+              .split("\n")
+              .filter((l) => l.startsWith("data: "));
+            for (const line of lines) {
+              let data = line.replace("data: ", "").trim();
+              if (data === "[END]") {
+                addMessage(botMessage, "bot");
+                botMessage = "";
+                isWaitingForResponse = false;
+                sendBtn.disabled = false;
+                inputEl.focus();
+              } else if (data.startsWith("[ERROR]")) {
+                addMessage("Error: " + data.substring(7), "bot");
+                isWaitingForResponse = false;
+                sendBtn.disabled = false;
+                inputEl.focus();
+              } else {
+                if (botMessage && !data.match(/^[.,!?;:]/)) {
+                  botMessage += " ";
+                }
+                botMessage += data;
+              }
+            }
+          }
+        } catch (e) {
+          addMessage("Error communicating with server.", "bot");
+          isWaitingForResponse = false;
+          sendBtn.disabled = false;
+          inputEl.focus();
+        }
+      }
+
+      sendBtn.addEventListener("click", () => {
+        const msg = inputEl.value.trim();
+        if (msg) sendMessage(msg);
+      });
+
+      inputEl.addEventListener("keydown", (e) => {
+        if (e.key === "Enter" && !sendBtn.disabled) {
+          e.preventDefault();
+          sendBtn.click();
+        }
+      });
+
+      startSession();
+    </script>
+  </body>
+</html>
