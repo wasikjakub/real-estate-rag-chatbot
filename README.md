@@ -1,4 +1,4 @@
-## Nova Przestrzeń Chatbot (Flask + React)
+## Real Estate Chatbot
 
 An end-to-end retrieval-augmented chatbot for Nova Przestrzeń. The backend (Flask) loads a PDF brochure, builds embeddings, and serves streaming answers over Server-Sent Events. The frontend (React) provides a simple chat UI. You can switch between OpenAI and a local Ollama model.
 
