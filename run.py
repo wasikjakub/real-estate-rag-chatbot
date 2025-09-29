@@ -6,6 +6,7 @@ import uuid
 from queue import Queue, Empty
 import threading
 import time
+import json
 
 os.environ["TOKENIZERS_PARALLELISM"] = "false"
 
@@ -46,7 +47,7 @@ chat_histories = {}
 def build_rag_chain(llm_source="openai", callbacks=None):
     loader = PyPDFLoader("data/nova_przestrzen.pdf")
     pages = loader.load()
-    splitter = RecursiveCharacterTextSplitter(chunk_size=500, chunk_overlap=50)
+    splitter = RecursiveCharacterTextSplitter(chunk_size=1000, chunk_overlap=50)
     chunks = splitter.split_documents(pages)
     embeddings = HuggingFaceEmbeddings(model_name="all-MiniLM-L6-v2")
     vectordb = FAISS.from_documents(chunks, embeddings)
@@ -76,7 +77,7 @@ def handle_chat_stream(data, llm_source="openai"):
     session_id = data.get("session_id")
 
     if not user_message and not chat_histories.get(session_id):
-        return Response("data: Hello! How can I help you today?\n\ndata: [END]\n\n", mimetype="text/event-stream")
+        return Response("data: Hello! I am the Nova Przestrzeń virtual assistant. I am here to answer all your questions regarding our offer.\n\ndata: [END]\n\n", mimetype="text/event-stream")
 
     if not user_message:
         return jsonify({"error": "No message provided"}), 400
@@ -95,13 +96,20 @@ def handle_chat_stream(data, llm_source="openai"):
 
             for chunk in rag_chain.stream(inputs):
                 token = chunk["answer"]
+                # Debug: print each token to console in real time
+                print(token, end='', flush=True)
                 output += token
-                yield f"data: {token}\n\n"
+                
+                # Properly encode the token to handle newlines and special characters
+                # Use JSON encoding to safely handle newlines, quotes, etc.
+                safe_token = json.dumps(token)[1:-1]  # Remove the surrounding quotes from JSON
+                yield f"data: {safe_token}\n\n"
 
             chat_history.append((user_message, output))
             yield "data: [END]\n\n"
 
         except Exception as e:
+            print(f"Error: {e}")
             yield f"data: [ERROR] {str(e)}\n\n"
 
     return Response(generate(), mimetype="text/event-stream")
@@ -113,8 +121,15 @@ def home():
 @app.route('/new-session', methods=['GET', 'OPTIONS'])
 def new_session():
     session_id = str(uuid.uuid4())
-    chat_histories[session_id] = []
-    welcome_message = "Hello! How can I help you today?"
+    # Insert a system prompt describing desired assistant behavior
+    system_prompt = (
+        "You are a helpful and friendly virtual assistant for Nova Przestrzeń. "
+        "Answer questions clearly and politely, always referencing our offer. "
+        "Use a professional but approachable tone."
+        "Don't say that you have access to some document, just answer like you know all the info."
+    )
+    chat_histories[session_id] = [("system", system_prompt)]
+    welcome_message = "Hello! I am the Nova Przestrzeń virtual assistant. I am here to answer all your questions regarding our offer."
     chat_histories[session_id].append(("system", welcome_message))
     return jsonify({"session_id": session_id, "welcome_message": welcome_message})
 

@@ -3,7 +3,17 @@
   <head>
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1" />
-    <title>AI Assistant</title>
+    <div style="max-width: 700px; margin: auto 20px 10px">
+      <label for="model-select">Choose model:</label>
+      <select id="model-select">
+        <option value="openai">OpenAI GPT-3.5-turbo</option>
+        <option value="ollama">Ollama Mistral</option>
+      </select>
+      <span id="current-model" style="margin-left: 20px; font-weight: bold"
+        >Current model: OpenAI GPT-3.5-turbo</span
+      >
+    </div>
+    <title>Nova Przestrzeń chatbot</title>
     <style>
       body {
         font-family: Arial, sans-serif;
@@ -31,10 +41,11 @@
 
       .message {
         margin-bottom: 15px;
+        white-space: pre-wrap; /* preserve line breaks and spaces */
       }
 
       .user {
-        color: #007bff; /* blue */
+        color: #015ec2; /* blue */
       }
 
       .bot {
@@ -74,7 +85,7 @@
     </style>
   </head>
   <body>
-    <h1>AI Assistant</h1>
+    <h1>Nova Przestrzeń</h1>
     <div id="chat"></div>
 
     <div id="input-area">
@@ -91,16 +102,57 @@
       const chatEl = document.getElementById("chat");
       const inputEl = document.getElementById("message");
       const sendBtn = document.getElementById("send");
+      const modelSelect = document.getElementById("model-select");
+      const currentModelLabel = document.getElementById("current-model");
 
       let sessionId = null;
       let isWaitingForResponse = false;
+      let selectedModel = modelSelect.value; // default model
+      let currentBotMessage = null; // Track the current streaming message
+
+      // Update label when model changes
+      modelSelect.addEventListener("change", () => {
+        selectedModel = modelSelect.value;
+        const labelText =
+          selectedModel === "openai"
+            ? "Current model: OpenAI GPT-3.5-turbo"
+            : "Current model: Ollama Mistral";
+        currentModelLabel.textContent = labelText;
+
+        // Optional: reset chat when model changes
+        chatEl.innerHTML = "";
+        currentBotMessage = null;
+        startSession();
+      });
 
       function addMessage(text, sender) {
         const msgDiv = document.createElement("div");
         msgDiv.className = "message " + sender;
-        msgDiv.textContent = text;
+
+        if (sender === "bot") {
+          msgDiv.innerHTML = formatBotText(text);
+        } else {
+          msgDiv.textContent = text;
+        }
+
         chatEl.appendChild(msgDiv);
         chatEl.scrollTop = chatEl.scrollHeight;
+        return msgDiv;
+      }
+
+      function appendToMessage(msgDiv, text) {
+        if (msgDiv.classList.contains("bot")) {
+          msgDiv.innerHTML += formatBotText(text);
+        } else {
+          msgDiv.textContent += text;
+        }
+        chatEl.scrollTop = chatEl.scrollHeight;
+      }
+
+      function formatBotText(text) {
+        return text
+          .replace(/\\n/g, "<br>")   // handle newlines
+          .replace(/\u00b2/g, "&sup2;"); // handle m²
       }
 
       async function startSession() {
@@ -128,7 +180,14 @@
         sendBtn.disabled = true;
         isWaitingForResponse = true;
 
-        const url = new URL("/chat-stream", window.location.origin);
+        // Create a new bot message div for the streaming response
+        currentBotMessage = addMessage("", "bot");
+
+        // Decide endpoint based on model selected
+        const endpoint =
+          selectedModel === "ollama" ? "/chat-stream-local" : "/chat-stream";
+
+        const url = new URL(endpoint, window.location.origin);
         url.searchParams.append("message", message);
         url.searchParams.append("session_id", sessionId);
 
@@ -136,8 +195,6 @@
           const response = await fetch(url, { method: "GET" });
           const reader = response.body.getReader();
           const decoder = new TextDecoder("utf-8");
-
-          let botMessage = "";
 
           while (true) {
             const { done, value } = await reader.read();
@@ -147,32 +204,52 @@
             const lines = chunk
               .split("\n")
               .filter((l) => l.startsWith("data: "));
+
             for (const line of lines) {
               let data = line.replace("data: ", "").trim();
+
               if (data === "[END]") {
-                addMessage(botMessage, "bot");
-                botMessage = "";
                 isWaitingForResponse = false;
                 sendBtn.disabled = false;
                 inputEl.focus();
+                currentBotMessage = null;
               } else if (data.startsWith("[ERROR]")) {
-                addMessage("Error: " + data.substring(7), "bot");
+                if (currentBotMessage) {
+                  currentBotMessage.textContent = "Error: " + data.substring(7);
+                } else {
+                  addMessage("Error: " + data.substring(7), "bot");
+                }
                 isWaitingForResponse = false;
                 sendBtn.disabled = false;
                 inputEl.focus();
+                currentBotMessage = null;
               } else {
-                if (botMessage && !data.match(/^[.,!?;:]/)) {
-                  botMessage += " ";
+                // Decode the JSON-escaped data back to original form
+                try {
+                  const decodedData = JSON.parse(`"${data}"`);
+                  // Append decoded data to the current streaming message
+                  if (currentBotMessage) {
+                    appendToMessage(currentBotMessage, decodedData);
+                  }
+                } catch (e) {
+                  // Fallback: if JSON parsing fails, use raw data
+                  if (currentBotMessage) {
+                    appendToMessage(currentBotMessage, data);
+                  }
                 }
-                botMessage += data;
               }
             }
           }
         } catch (e) {
-          addMessage("Error communicating with server.", "bot");
+          if (currentBotMessage) {
+            currentBotMessage.textContent = "Error communicating with server.";
+          } else {
+            addMessage("Error communicating with server.", "bot");
+          }
           isWaitingForResponse = false;
           sendBtn.disabled = false;
           inputEl.focus();
+          currentBotMessage = null;
         }
       }
 
