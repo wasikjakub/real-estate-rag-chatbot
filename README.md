@@ -2,6 +2,21 @@
 
 An end-to-end retrieval-augmented chatbot for Nova Przestrzeń. The backend (Flask) loads a PDF brochure, builds embeddings, and serves streaming answers over Server-Sent Events. The frontend (React) provides a simple chat UI. You can switch between OpenAI and a local Ollama model.
 
+### Demo 
+
+- Family of three, including one child:
+
+  ![Family of three result](docs/screenshots/test-family-of-three.png)
+
+- Couple wanting more than a studio, small budget:
+
+  ![Couple more than studio result](docs/screenshots/test-couple-small-budget.png)
+
+- Single person with small budget:
+
+  ![Single small budget result](docs/screenshots/test-single-small-budget.png)
+
+
 ### Features
 - Streaming chat responses (SSE)
 - Retrieval-Augmented Generation (FAISS + HuggingFace embeddings)
@@ -82,23 +97,4 @@ Environment variables (with defaults):
 
 ### License
 MIT
-
-### Test cases (screenshots)
-
-Add the following images to `docs/screenshots/` to see them rendered here. The filenames below are referenced by this README, so keep them as-is.
-
-- Family of three, including one child:
-
-  ![Family of three result](docs/screenshots/test-family-of-three.png)
-
-- Couple wanting more than a studio, small budget:
-
-  ![Couple more than studio result](docs/screenshots/test-couple-small-budget.png)
-
-- Single person with small budget:
-
-  ![Single small budget result](docs/screenshots/test-single-small-budget.png)
-
-Place your images (the ones you shared in chat) into the paths above and push. They will appear on GitHub automatically.
-
 
