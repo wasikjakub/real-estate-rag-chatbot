@@ -1,1 +1,22 @@
+# Python
+__pycache__/
+*.pyc
+*.pyo
+*.pyd
+.env
+.venv/
+
+# Node
+my-react-app/node_modules/
+my-react-app/.env
+
+# OS
+.DS_Store
+
+# Build
+my-react-app/build/
+
+# FAISS index (if persisted later)
+*.faiss
+index/*
 .env
